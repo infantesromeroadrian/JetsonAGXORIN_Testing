@@ -17,8 +17,10 @@ Este proyecto tiene como objetivo evaluar y documentar el rendimiento del **NVID
 Testin_Jetson_AGX_ORIN/
 │
 ├── 📁 src/                       # Código fuente principal
-│   ├── test_ollama_llama3_2_3b.py    # Script de testing individual
-│   └── sweep_ollama_llama3_2_3b.py   # Script de barrido paramétrico
+│   ├── test_ollama_llama3_2_3b.py         # Testing individual modelo 3B
+│   ├── sweep_ollama_llama3_2_3b.py        # Barrido paramétrico modelo 3B
+│   ├── test_ollama_llama3_2_vision_11b.py # Testing modelo visión 11B
+│   └── sweep_ollama_llama3_2_vision_11b.py # Barrido modelo visión 11B
 │
 ├── 📁 docs/                      # Documentación técnica
 │   ├── Informe_Tecnico_Jetson_AGX_Orin.md  # Informe técnico completo
@@ -79,7 +81,7 @@ ollama pull llama3.2:3b
 
 ## 🚀 Uso
 
-### Test Simple de Rendimiento
+### Test Simple de Rendimiento (Modelo 3B)
 
 ```bash
 # Ejecutar test básico con 5 repeticiones
@@ -89,10 +91,23 @@ python src/test_ollama_llama3_2_3b.py --model llama3.2:3b -n 5 --out metrics.jso
 python src/test_ollama_llama3_2_3b.py --model llama3.2:3b --stream
 ```
 
+### Test con Modelo de Visión (11B)
+
+```bash
+# Test con imagen (modo visión)
+python src/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp -n 3
+
+# Comparación texto vs visión
+python src/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp --test-mode both
+
+# Solo modo texto (sin usar capacidades de visión)
+python src/test_ollama_llama3_2_vision_11b.py --test-mode text -n 5
+```
+
 ### Barrido Paramétrico Completo
 
 ```bash
-# Ejecutar barrido con múltiples configuraciones
+# Barrido modelo 3B
 python src/sweep_ollama_llama3_2_3b.py \
     --model llama3.2:3b \
     --ctx 2048,4096 \
@@ -101,6 +116,14 @@ python src/sweep_ollama_llama3_2_3b.py \
     --runs 3 \
     --csv results.csv \
     --out metrics.jsonl
+
+# Barrido modelo visión 11B
+python src/sweep_ollama_llama3_2_vision_11b.py \
+    --image assets/puerto-new-york-1068x570.webp \
+    --ctx 4096,8192 \
+    --num-predict 128,256 \
+    --runs 3 \
+    --csv vision_results.csv
 ```
 
 ### Parámetros Disponibles
@@ -128,21 +151,34 @@ python src/sweep_ollama_llama3_2_3b.py \
 
 ### Rendimiento en Jetson AGX Orin
 
-| Métrica | Valor |
-|---------|-------|
-| **Modelo** | llama3.2:3b (~2.0 GB) |
-| **Velocidad de Decodificación** | ~44.8 tokens/seg |
-| **Uso de GPU** | 90-99% @ 1.3 GHz |
-| **Temperatura** | 60-61°C (estable) |
-| **RAM Utilizada** | ~5.6 GB de 61 GB |
-| **Consumo Energético** | 31-35W en carga, 5W en reposo |
+| Modelo | Tamaño | Modo | Velocidad (t/s) | RAM Usada | GPU | Estado |
+|--------|--------|------|-----------------|-----------|-----|--------|
+| **llama3.2:3b** | ~2 GB | Texto | 44.8 | ~5.6 GB | 90-99% | ✅ Verificado |
+| **llama3.2-vision:11b** | ~7 GB | Texto | 25.4 | ~12 GB | 90-99% | ✅ Verificado |
+| **llama3.2-vision:11b** | ~7 GB | Visión | 13.8 | ~15 GB | 90-99% | ✅ Verificado |
 
-### Comparación con RTX Ada 2000
+### Comparación con RTX Ada 2000 (modelo 3B)
 
 | Hardware | Velocidad (t/s) | Factor de Aceleración |
 |----------|-----------------|----------------------|
 | RTX Ada 2000 | 74.65 | 1.67× |
 | Jetson AGX Orin | 44.80 | 1.00× (referencia) |
+
+### Características del Modelo de Visión (llama3.2-vision:11b)
+
+| Métrica | Valor | Estado |
+|---------|-------|--------|
+| **Velocidad modo texto** | 25.4 t/s | ✅ Verificado |
+| **Velocidad modo visión** | 13.8 t/s | ✅ Verificado |
+| **Factor texto/visión** | 1.84× (texto 84% más rápido) | ✅ Consistente |
+| **Overhead por imagen** | ~15 segundos | ✅ Medido |
+| **Prefill texto** | 419-774 tokens/seg | ✅ Muy eficiente |
+| **Prefill primera imagen** | 4.1 tokens/seg | ⚠️ Lento inicial |
+| **Prefill imagen en caché** | 154-161 tokens/seg | ✅ Mucho mejor |
+| **Factor vs modelo 3B (texto)** | 57% de velocidad | ✅ Mejor de lo esperado |
+| **Factor vs modelo 3B (visión)** | 31% de velocidad | ✅ Aceptable para visión |
+| **Temperatura** | 60-65°C (estable) | ✅ Normal |
+| **Consumo Energético** | 31-35W en carga, 5W en reposo | ✅ Eficiente |
 
 ## 📈 Monitoreo del Sistema
 
@@ -165,19 +201,26 @@ watch -n 1 'cat /sys/devices/virtual/thermal/thermal_zone*/temp'
 ## 🎯 Casos de Uso Recomendados
 
 ### ✅ Ideal para:
-- **Modelos de 4-8B parámetros** en INT4/FP8
+- **Modelos de 1-3B parámetros** para máximo rendimiento (40-45 t/s)
+- **Modelos de 4-8B parámetros** en INT4/FP8 con buen balance
+- **Modelo de visión 11B** para análisis de imágenes (16-22 t/s)
 - Aplicaciones de edge computing con IA
 - Inferencia en tiempo real con restricciones de energía
+- Análisis de imágenes local sin cloud (seguridad/privacidad)
 - Desarrollo y prototipado de soluciones embebidas de IA
 
 ### ⚠️ Considerar con cuidado:
 - **Modelos de 13B parámetros** (justo en el límite de RAM)
 - Aplicaciones con contextos muy largos (>8K tokens)
+- Procesamiento de múltiples imágenes en paralelo (overhead de visión)
+- Primera inferencia con imágenes nuevas (latencia inicial alta)
 
 ### ❌ No recomendado:
 - Modelos superiores a 13B parámetros
+- Modelo llama3.2-vision:90b (excede memoria disponible)
 - Entrenamiento de modelos grandes
 - Aplicaciones que requieran múltiples modelos simultáneos
+- Procesamiento de video en tiempo real con modelos grandes
 
 ## 🔬 Análisis Técnico
 
@@ -214,9 +257,10 @@ El Jetson AGX Orin utiliza una arquitectura de memoria unificada donde CPU y GPU
 
 ## 📚 Documentación Adicional
 
-- [Informe Técnico Completo](docs/Informe_Tecnico_Jetson_AGX_Orin.md) - Análisis detallado del hardware y pruebas
+- [Informe Técnico Completo](docs/Informe_Tecnico_Jetson_AGX_Orin.md) - Análisis detallado del hardware, pruebas de modelos 3B y 11B (visión)
 - [NVIDIA Jetson Documentation](https://docs.nvidia.com/jetson/)
 - [Ollama Documentation](https://ollama.ai/docs)
+- [Llama 3.2 Vision Model](https://ollama.com/library/llama3.2-vision) - Documentación del modelo multimodal
 
 ## 🤝 Contribuciones
 
