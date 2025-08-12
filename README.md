@@ -17,10 +17,13 @@ Este proyecto tiene como objetivo evaluar y documentar el rendimiento del **NVID
 Testin_Jetson_AGX_ORIN/
 │
 ├── 📁 src/                       # Código fuente principal
-│   ├── test_ollama_llama3_2_3b.py         # Testing individual modelo 3B
-│   ├── sweep_ollama_llama3_2_3b.py        # Barrido paramétrico modelo 3B
-│   ├── test_ollama_llama3_2_vision_11b.py # Testing modelo visión 11B
-│   └── sweep_ollama_llama3_2_vision_11b.py # Barrido modelo visión 11B
+│   ├── 📁 llama3_2_3b/           # Scripts para modelo Llama 3.2:3B
+│   │   ├── test_ollama_llama3_2_3b.py      # Testing individual modelo 3B
+│   │   └── sweep_ollama_llama3_2_3b.py     # Barrido paramétrico modelo 3B
+│   │
+│   └── 📁 llama3_2_vision_11b/   # Scripts para modelo Llama 3.2-vision:11B
+│       ├── test_ollama_llama3_2_vision_11b.py  # Testing modelo visión 11B
+│       └── sweep_ollama_llama3_2_vision_11b.py # Barrido modelo visión 11B
 │
 ├── 📁 docs/                      # Documentación técnica
 │   ├── Informe_Tecnico_Jetson_AGX_Orin.md  # Informe técnico completo
@@ -85,30 +88,30 @@ ollama pull llama3.2:3b
 
 ```bash
 # Ejecutar test básico con 5 repeticiones
-python src/test_ollama_llama3_2_3b.py --model llama3.2:3b -n 5 --out metrics.jsonl
+python src/llama3_2_3b/test_ollama_llama3_2_3b.py --model llama3.2:3b -n 5 --out metrics.jsonl
 
 # Test con streaming (ver tokens en tiempo real)
-python src/test_ollama_llama3_2_3b.py --model llama3.2:3b --stream
+python src/llama3_2_3b/test_ollama_llama3_2_3b.py --model llama3.2:3b --stream
 ```
 
 ### Test con Modelo de Visión (11B)
 
 ```bash
 # Test con imagen (modo visión)
-python src/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp -n 3
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp -n 3
 
 # Comparación texto vs visión
-python src/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp --test-mode both
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp --test-mode both
 
 # Solo modo texto (sin usar capacidades de visión)
-python src/test_ollama_llama3_2_vision_11b.py --test-mode text -n 5
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --test-mode text -n 5
 ```
 
 ### Barrido Paramétrico Completo
 
 ```bash
 # Barrido modelo 3B
-python src/sweep_ollama_llama3_2_3b.py \
+python src/llama3_2_3b/sweep_ollama_llama3_2_3b.py \
     --model llama3.2:3b \
     --ctx 2048,4096 \
     --num-predict 128,256,512 \
@@ -118,7 +121,7 @@ python src/sweep_ollama_llama3_2_3b.py \
     --out metrics.jsonl
 
 # Barrido modelo visión 11B
-python src/sweep_ollama_llama3_2_vision_11b.py \
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py \
     --image assets/puerto-new-york-1068x570.webp \
     --ctx 4096,8192 \
     --num-predict 128,256 \

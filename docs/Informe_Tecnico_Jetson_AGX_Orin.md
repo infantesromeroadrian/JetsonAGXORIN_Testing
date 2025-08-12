@@ -177,7 +177,7 @@ python test_ollama_llama3.2:3b_jetson.py --model llama3.2:3b -n 5 --out metrics.
 
 ```mermaid
 graph LR
-    subgraph "Comparación de Velocidad por Modo en Jetson AGX Orin"
+    subgraph Comparacion["Comparación de Velocidad por Modo en Jetson AGX Orin"]
         A["llama3.2:3b<br/>Texto<br/>44.8 t/s<br/>100%"] 
         B["llama3.2-vision:11b<br/>Texto<br/>25.4 t/s<br/>57%"]
         C["llama3.2-vision:11b<br/>Visión<br/>13.8 t/s<br/>31%"]
@@ -424,7 +424,7 @@ Factor de velocidad texto/visión: 1.84x
 
 ```mermaid
 graph LR
-    subgraph "Comparación de Velocidad de Decodificación (tokens/segundo)"
+    subgraph Comparacion2["Comparación de Velocidad de Decodificación (tokens/segundo)"]
         A["RTX Ada 2000<br/>74.65 t/s"] 
         B["Jetson AGX Orin<br/>44.80 t/s"]
     end
@@ -436,9 +436,8 @@ graph LR
 ## Comparación Detallada por Configuración
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#2ecc71','primaryTextColor':'#fff','primaryBorderColor':'#27ae60','lineColor':'#5A6C7D','secondaryColor':'#3498db','tertiaryColor':'#e74c3c'}}}%%
 graph TD
-    subgraph "Rendimiento por Configuración (decode_tps)"
+    subgraph Config["Rendimiento por Configuración (decode_tps)"]
         RTX256["RTX Ada 2000<br/>256 tokens<br/>73.10 t/s"]
         RTX512["RTX Ada 2000<br/>512 tokens<br/>77.74 t/s"]
         JETSON["Jetson AGX Orin<br/>Media global<br/>44.80 t/s"]
@@ -456,7 +455,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph "Rendimiento por Carrera - Jetson AGX Orin (decode t/s)"
+    subgraph Carreras["Rendimiento por Carrera - Jetson AGX Orin (decode t/s)"]
         Run1["Run 1<br/>44.4 t/s<br/>Wall: 2.48s"]
         Run2["Run 2<br/>45.0 t/s<br/>Wall: 2.46s"]
         Run3["Run 3<br/>44.9 t/s<br/>Wall: 2.54s"]
@@ -484,7 +483,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph "Arquitectura de Memoria - Jetson AGX Orin"
+    subgraph Memoria["Arquitectura de Memoria - Jetson AGX Orin"]
         RAM["RAM Física<br/>64 GB Total<br/>61 GB Utilizable"]
         SWAP["Swap ZRAM<br/>~30 GB<br/>12 dispositivos"]
         UMA["Memoria Unificada (UMA)<br/>CPU + GPU comparten RAM"]
@@ -510,7 +509,7 @@ graph TD
 
 ```mermaid
 graph LR
-    subgraph "Uso de Recursos Durante Inferencia con llama3.2:3b"
+    subgraph Recursos["Uso de Recursos Durante Inferencia con llama3.2:3b"]
         GPU["GPU<br/>90-99% @ 1.3GHz<br/>Temp: 60-61°C"]
         MEM["Memoria<br/>5.6/61 GB usada<br/>Swap: 0 GB<br/>EMC: 45% @ 3199MHz"]
         POW["Potencia<br/>Carga: 31-35W<br/>Reposo: 5W"]
@@ -531,20 +530,20 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph "Almacenamiento Jetson AGX Orin"
+    subgraph Almacenamiento["Almacenamiento Jetson AGX Orin"]
         EMMC["eMMC Interna<br/>57.8 GB disponibles<br/>(ext4)"]
         EFI["Partición EFI<br/>64 MB<br/>(vfat)"]
         NVME["NVMe/M.2<br/>No detectado<br/>❌"]
     end
     
-    subgraph "Recomendaciones de Modelos LLM"
+    subgraph Recomendaciones["Recomendaciones de Modelos LLM"]
         SMALL["4-8B Parámetros<br/>INT4/FP8<br/>✅ Cómodo en 64GB"]
         MEDIUM["13B Parámetros<br/>✅ Posible<br/>⚠️ Justo en RAM"]
         LARGE[">13B Parámetros<br/>❌ No recomendado<br/>Excede capacidad"]
         
         SMALL -->|"Recomendado"| OPT["Rendimiento<br/>Óptimo"]
         MEDIUM -->|"Con cuidado"| OPT
-        LARGE -->|"Evitar"| SWAP["Caerá en<br/>Swap"]
+        LARGE -->|"Evitar"| SWAP2["Caerá en<br/>Swap"]
     end
     
     style EMMC fill:#3498db,stroke:#2980b9,stroke-width:2px
@@ -554,14 +553,14 @@ graph TD
     style MEDIUM fill:#f39c12,stroke:#e67e22,stroke-width:2px
     style LARGE fill:#e74c3c,stroke:#c0392b,stroke-width:2px
     style OPT fill:#27ae60,stroke:#229954,stroke-width:3px,color:#fff
-    style SWAP fill:#c0392b,stroke:#a93226,stroke-width:2px,color:#fff
+    style SWAP2 fill:#c0392b,stroke:#a93226,stroke-width:2px,color:#fff
 ```
 
 ## Flujo de Trabajo del Benchmark
 
 ```mermaid
 graph TD
-    subgraph "Flujo de Benchmark Ollama"
+    subgraph Flujo["Flujo de Benchmark Ollama"]
         A["Inicio<br/>Ollama Server<br/>Puerto 11434"] 
         B["Carga Modelo<br/>llama3.2:3b<br/>~2.0 GB"]
         C["Warmup<br/>Preparación<br/>del Sistema"]
@@ -595,7 +594,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph "Rendimiento por Modelo en Jetson AGX Orin"
+    subgraph Rendimiento["Rendimiento por Modelo en Jetson AGX Orin"]
         MODEL3B["llama3.2:3b<br/>3B params<br/>~2 GB"]
         MODEL11B_TEXT["llama3.2-vision:11b<br/>(Modo Texto)<br/>11B params<br/>~7 GB"]
         MODEL11B_VISION["llama3.2-vision:11b<br/>(Modo Visión)<br/>11B params<br/>~7 GB"]
@@ -628,15 +627,15 @@ graph TD
 
 ```mermaid
 graph TB
-    subgraph "Dashboard Comparativo de Rendimiento"
-        subgraph "RTX Ada 2000"
+    subgraph Dashboard["Dashboard Comparativo de Rendimiento"]
+        subgraph RTX["RTX Ada 2000"]
             RTX_SPEED["Velocidad<br/>74.65 t/s"]
             RTX_LOAD["Tiempo Carga<br/>0.04s"]
             RTX_VRAM["VRAM<br/>Dedicada"]
             RTX_POWER["Potencia<br/>Mayor consumo"]
         end
         
-        subgraph "Jetson AGX Orin"
+        subgraph Jetson["Jetson AGX Orin"]
             JET_SPEED["Velocidad<br/>44.8 t/s (3B)<br/>25.4 t/s (11B texto)<br/>13.8 t/s (11B visión)"]
             JET_RAM["RAM Unificada<br/>64 GB UMA"]
             JET_TEMP["Temperatura<br/>60-65°C estable"]
@@ -691,6 +690,123 @@ El testing exhaustivo del Jetson AGX Orin Developer Kit ha demostrado capacidade
    - Procesamiento de imágenes funcional con overhead manejable
    - Beneficio significativo del caché (38× más rápido después de primera imagen)
    - Factor texto/visión de 1.84× es competitivo para hardware edge
+
+# Guía de Uso de los Scripts de Testing
+
+## Scripts Disponibles
+
+El proyecto incluye scripts modularizados y profesionales para testing de modelos de visión en Jetson AGX Orin:
+
+### 🧪 1. SCRIPT DE TEST INDIVIDUAL
+
+**Archivo**: `test_ollama_llama3_2_vision_11b.py`
+
+```bash
+# Desde la raíz del proyecto
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py
+
+# Ejemplos específicos:
+# Test básico (auto-detecta imagen)
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py
+
+# Test con imagen específica
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp -n 3
+
+# Solo modo texto
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --test-mode text -n 5
+
+# Solo modo visión
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --test-mode vision --image assets/puerto-new-york-1068x570.webp
+
+# Con streaming (ver tokens en tiempo real)
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --stream --image assets/puerto-new-york-1068x570.webp
+
+# Guardar métricas
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --out metrics_vision.jsonl
+```
+
+### 📊 2. SCRIPT DE BARRIDO PARAMÉTRICO
+
+**Archivo**: `sweep_ollama_llama3_2_vision_11b.py`
+
+```bash
+# Desde la raíz del proyecto
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py
+
+# Ejemplos específicos:
+# Barrido básico
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py --image assets/puerto-new-york-1068x570.webp
+
+# Barrido completo variando parámetros
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py \
+  --ctx "2048,4096" \
+  --temp "0,0.4,0.7" \
+  --num-predict "128,256" \
+  --runs 3 \
+  --csv results_vision.csv
+
+# Solo modo texto (múltiples configuraciones)
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py \
+  --test-mode text \
+  --ctx "2048,4096,8192" \
+  --runs 5
+
+# Barrido con warmup y pausa entre ejecuciones
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py \
+  --warmup \
+  --sleep 2.0 \
+  --cycles 2 \
+  --out sweep_metrics.jsonl
+```
+
+### 📋 PARÁMETROS MÁS ÚTILES
+
+#### 🎯 Para TEST (`test_ollama_llama3_2_vision_11b.py`):
+
+```
+--image <ruta>              # Imagen para test de visión
+--test-mode <both|text|vision>  # Modo de test
+-n, --runs <número>         # Repeticiones por modo
+--stream                    # Ver tokens en tiempo real
+--out <archivo.jsonl>       # Guardar métricas
+--ctx <número>              # Tamaño contexto (default: 4096)
+--temp <decimal>            # Temperatura (default: 0.4)
+--num-predict <número>      # Tokens a generar (default: 256)
+```
+
+#### 📈 Para SWEEP (`sweep_ollama_llama3_2_vision_11b.py`):
+
+```
+--ctx "2048,4096,8192"      # Múltiples contextos
+--temp "0,0.4,0.7"          # Múltiples temperaturas  
+--num-predict "128,256,512" # Múltiples tokens a generar
+--seed "42,123"             # Múltiples semillas
+--cycles <número>           # Repetir barrido completo
+--warmup                    # Warmup antes de cada combo
+--sleep <segundos>          # Pausa entre ejecuciones
+--csv <archivo.csv>         # Salida CSV tabular
+--out <archivo.jsonl>       # Salida JSONL detallada
+```
+
+### 🚀 COMANDOS DE INICIO RÁPIDO
+
+#### ⚡ Para empezar inmediatamente:
+
+```bash
+# Test rápido (3 runs de cada modo)
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py
+
+# Barrido rápido (básico)  
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py --runs 2
+
+# Ver ayuda completa
+python src/llama3_2_vision_11b/test_ollama_llama3_2_vision_11b.py --help
+python src/llama3_2_vision_11b/sweep_ollama_llama3_2_vision_11b.py --help
+```
+
+**Nota**: Los scripts **auto-detectan** la imagen `puerto-new-york-1068x570.webp` en `assets/` si no especificas ninguna.
+
+---
 
 ### Recomendaciones de Implementación
 
