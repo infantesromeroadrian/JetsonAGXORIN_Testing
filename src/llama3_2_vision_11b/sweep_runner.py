@@ -18,6 +18,7 @@ from typing import Dict, List, Tuple, Optional, Any, Union
 from .ollama_client import OllamaClient
 from .image_utils import ImageProcessor
 from .metrics import MetricsAnalyzer
+from .system_monitor import SystemMonitor, get_instant_metrics
 
 
 class ParameterCombinationGenerator:
@@ -134,19 +135,25 @@ class SweepRunner:
     """Ejecutor principal de barridos paramétricos."""
     
     def __init__(self, host: str = "http://localhost:11434", 
-                 timeout: int = 600):
+                 timeout: int = 600,
+                 enable_system_monitoring: bool = True):
         """
         Inicializa el ejecutor de barridos.
         
         Args:
             host: URL del servidor Ollama
             timeout: Timeout por defecto
+            enable_system_monitoring: Si activar monitoreo del sistema
         """
         self.client = OllamaClient(host, timeout)
         self.image_processor = ImageProcessor()
         self.metrics_analyzer = MetricsAnalyzer()
         self.param_generator = ParameterCombinationGenerator()
         self.prompt_manager = PromptManager()
+        
+        # Sistema de monitoreo
+        self.system_monitor = SystemMonitor() if enable_system_monitoring else None
+        self.enable_system_monitoring = enable_system_monitoring
         
         # Estadísticas del barrido
         self.results_by_mode = {"text": [], "vision": []}
@@ -258,19 +265,35 @@ class SweepRunner:
     
     def setup_csv_output(self, csv_path: str) -> None:
         """
-        Configura archivo CSV de salida con headers.
+        Configura archivo CSV de salida con headers incluyendo métricas del sistema.
         
         Args:
             csv_path: Ruta del archivo CSV
         """
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow([
+            base_headers = [
                 "timestamp", "host", "model", "mode", "prompt_hash", "prompt_length",
                 "image_path", "context", "num_predict", "temperature", "seed",
                 "cycle", "run", "wall_time_s", "total_duration_s", "load_duration_s", 
                 "prefill_tokens", "decode_tokens", "prefill_tps", "decode_tps"
-            ])
+            ]
+            
+            # Añadir cabeceras de métricas del sistema si está habilitado
+            if self.enable_system_monitoring:
+                system_headers = [
+                    "cpu_usage_mean_percent", "cpu_usage_max_percent", "cpu_usage_min_percent",
+                    "ram_usage_mean_percent", "ram_usage_max_percent",
+                    "ram_used_mean_gb", "ram_used_max_gb",
+                    "gpu_usage_mean_percent", "gpu_usage_max_percent", "gpu_usage_min_percent",
+                    "cpu_temp_mean_c", "cpu_temp_max_c",
+                    "gpu_temp_mean_c", "gpu_temp_max_c",
+                    "power_mean_watts", "power_max_watts",
+                    "monitoring_duration_s", "monitoring_samples"
+                ]
+                base_headers.extend(system_headers)
+            
+            writer.writerow(base_headers)
     
     def execute_single_run(self,
                           model: str,
@@ -279,7 +302,7 @@ class SweepRunner:
                           options: Dict[str, Any],
                           seed: Optional[int] = None) -> Dict[str, Any]:
         """
-        Ejecuta una sola ejecución del modelo.
+        Ejecuta una sola ejecución del modelo con monitoreo del sistema.
         
         Args:
             model: Nombre del modelo
@@ -289,15 +312,27 @@ class SweepRunner:
             seed: Semilla (opcional)
             
         Returns:
-            Dict con métricas procesadas
+            Dict con métricas procesadas combinadas
         """
         images = [image_base64] if image_base64 else None
+        
+        # Iniciar monitoreo del sistema si está habilitado
+        system_metrics_summary = None
+        if self.system_monitor:
+            self.system_monitor.start_monitoring()
         
         response, stats, wall_time = self.client.generate_response(
             model, prompt, images, options, stream=False
         )
         
-        return self.metrics_analyzer.process_ollama_stats(stats, wall_time)
+        # Detener monitoreo y obtener resumen
+        if self.system_monitor:
+            monitor_history = self.system_monitor.stop_monitoring()
+            system_metrics_summary = self.system_monitor.get_metrics_summary()
+        
+        return self.metrics_analyzer.process_ollama_stats(
+            stats, wall_time, system_metrics_summary
+        )
     
     def run_sweep(self,
                  model: str,
@@ -426,6 +461,10 @@ class SweepRunner:
                             
                     except Exception as e:
                         print(f"❌ Error en job {self.completed_jobs}: {e}")
+                        import traceback
+                        print("\n🔍 TRACEBACK COMPLETO:")
+                        traceback.print_exc()
+                        print("-" * 60)
                         continue
         
         # Generar resumen
@@ -433,26 +472,80 @@ class SweepRunner:
     
     def _print_progress(self, metrics: Dict[str, Any], 
                        current_job: int, total_jobs: int) -> None:
-        """Imprime progreso de una ejecución."""
+        """Imprime progreso de una ejecución con métricas del sistema."""
         pf_tps = metrics.get('prefill_tps', 0)
         dc_tps = metrics.get('decode_tps', 0)
         
-        print(f"[{current_job}/{total_jobs}] cycle={metrics['cycle']} "
-              f"run={metrics['run']} mode={metrics['mode']}")
-        print(f"  ctx={metrics['context']} np={metrics['num_predict']} "
-              f"temp={metrics['temperature']} seed={metrics.get('seed', 'none')}")
+        # Formatear datos con verificación de tipo
+        cycle = metrics.get('cycle', '?')
+        run = metrics.get('run', '?')
+        mode = metrics.get('mode', '?')
+        context = metrics.get('context', '?')
+        num_predict = metrics.get('num_predict', '?')
+        temperature = metrics.get('temperature', '?')
+        seed = metrics.get('seed', 'none')
         
-        if metrics['image_path']:
-            img_name = Path(metrics['image_path']).name
-            print(f"  img={img_name}")
+        print(f"[{current_job}/{total_jobs}] cycle={cycle} run={run} mode={mode}")
+        print(f"  ctx={context} np={num_predict} temp={temperature} seed={seed}")
+        
+        image_path = metrics.get('image_path')
+        if image_path:
+            try:
+                img_name = Path(image_path).name
+                print(f"  img={img_name}")
+            except Exception:
+                print(f"  img={image_path}")
         else:
             print(f"  modo texto puro")
             
-        print(f"  prefill={metrics.get('prefill_tokens', 0)} @ "
-              f"{pf_tps:.1f if pf_tps else 0} t/s | "
+        # Formatear valores de manera segura
+        pf_tps_str = f"{pf_tps:.1f}" if (pf_tps and isinstance(pf_tps, (int, float))) else "0"
+        dc_tps_str = f"{dc_tps:.1f}" if (dc_tps and isinstance(dc_tps, (int, float))) else "0"
+        
+        print(f"  [ollama] prefill={metrics.get('prefill_tokens', 0)} @ "
+              f"{pf_tps_str} t/s | "
               f"decode={metrics.get('decode_tokens', 0)} @ "
-              f"{dc_tps:.1f if dc_tps else 0} t/s")
-        print(f"  wall={metrics['wall_time_s']:.2f}s\n")
+              f"{dc_tps_str} t/s")
+        
+        wall_time = metrics.get('wall_time_s', 0)
+        if isinstance(wall_time, (int, float)):
+            print(f"  [ollama] wall={wall_time:.2f}s")
+        else:
+            print(f"  [ollama] wall={wall_time}s")
+        
+        # Mostrar métricas del sistema si están disponibles
+        if self.enable_system_monitoring:
+            cpu_mean = metrics.get('cpu_usage_mean_percent')
+            ram_mean = metrics.get('ram_usage_mean_percent')
+            gpu_mean = metrics.get('gpu_usage_mean_percent')
+            
+            system_info = []
+            if cpu_mean is not None and isinstance(cpu_mean, (int, float)):
+                cpu_mean_str = f"{cpu_mean:.1f}"
+                system_info.append(f"CPU:{cpu_mean_str}%")
+            if ram_mean is not None and isinstance(ram_mean, (int, float)):
+                ram_mean_str = f"{ram_mean:.1f}"
+                system_info.append(f"RAM:{ram_mean_str}%")
+            if gpu_mean is not None and isinstance(gpu_mean, (int, float)):
+                gpu_mean_str = f"{gpu_mean:.1f}"
+                system_info.append(f"GPU:{gpu_mean_str}%")
+                
+            # Añadir temperatura si está disponible
+            cpu_temp = metrics.get('cpu_temp_mean_c')
+            if cpu_temp is not None and isinstance(cpu_temp, (int, float)):
+                cpu_temp_str = f"{cpu_temp:.1f}"
+                system_info.append(f"T:{cpu_temp_str}°C")
+                
+            # Añadir potencia si está disponible
+            power = metrics.get('power_mean_watts')
+            if power is not None and isinstance(power, (int, float)):
+                power_str = f"{power:.1f}"
+                system_info.append(f"P:{power_str}W")
+            
+            if system_info:
+                print(f"  [system] {' '.join(system_info)}")
+        
+        print()  # línea en blanco
     
     def _save_results(self, metrics: Dict[str, Any], 
                      jsonl_path: Optional[str], 
@@ -468,20 +561,53 @@ class SweepRunner:
         if csv_path:
             with open(csv_path, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow([
-                    timestamp, self.client.host, metrics["model"], metrics["mode"],
-                    metrics["prompt_hash"], metrics["prompt_length"],
-                    metrics.get("image_path", ""), metrics["context"],
-                    metrics["num_predict"], metrics["temperature"], 
-                    metrics.get("seed", ""), metrics["cycle"], metrics["run"],
-                    round(metrics["wall_time_s"], 3),
-                    round(metrics.get("total_duration_s", 0), 3),
-                    round(metrics.get("load_duration_s", 0), 3),
+                # Función auxiliar para formateo seguro
+                def safe_round(value, decimals=3):
+                    if value is None or not isinstance(value, (int, float)):
+                        return 0
+                    return round(value, decimals)
+                
+                base_row = [
+                    timestamp, self.client.host, 
+                    metrics.get("model", ""), metrics.get("mode", ""),
+                    metrics.get("prompt_hash", ""), metrics.get("prompt_length", 0),
+                    metrics.get("image_path", ""), metrics.get("context", 0),
+                    metrics.get("num_predict", 0), metrics.get("temperature", 0), 
+                    metrics.get("seed", ""), metrics.get("cycle", 0), metrics.get("run", 0),
+                    safe_round(metrics.get("wall_time_s"), 3),
+                    safe_round(metrics.get("total_duration_s"), 3),
+                    safe_round(metrics.get("load_duration_s"), 3),
                     metrics.get("prefill_tokens", 0),
                     metrics.get("decode_tokens", 0),
-                    round(metrics.get("prefill_tps", 0), 2),
-                    round(metrics.get("decode_tps", 0), 2)
-                ])
+                    safe_round(metrics.get("prefill_tps"), 2),
+                    safe_round(metrics.get("decode_tps"), 2)
+                ]
+                
+                # Añadir métricas del sistema si está habilitado
+                if self.enable_system_monitoring:
+                    system_row = [
+                        safe_round(metrics.get("cpu_usage_mean_percent"), 2),
+                        safe_round(metrics.get("cpu_usage_max_percent"), 2),
+                        safe_round(metrics.get("cpu_usage_min_percent"), 2),
+                        safe_round(metrics.get("ram_usage_mean_percent"), 2),
+                        safe_round(metrics.get("ram_usage_max_percent"), 2),
+                        safe_round(metrics.get("ram_used_mean_gb"), 2),
+                        safe_round(metrics.get("ram_used_max_gb"), 2),
+                        safe_round(metrics.get("gpu_usage_mean_percent"), 2),
+                        safe_round(metrics.get("gpu_usage_max_percent"), 2),
+                        safe_round(metrics.get("gpu_usage_min_percent"), 2),
+                        safe_round(metrics.get("cpu_temp_mean_c"), 1),
+                        safe_round(metrics.get("cpu_temp_max_c"), 1),
+                        safe_round(metrics.get("gpu_temp_mean_c"), 1),
+                        safe_round(metrics.get("gpu_temp_max_c"), 1),
+                        safe_round(metrics.get("power_mean_watts"), 2),
+                        safe_round(metrics.get("power_max_watts"), 2),
+                        safe_round(metrics.get("monitoring_duration_s"), 1),
+                        metrics.get("monitoring_samples", 0)
+                    ]
+                    base_row.extend(system_row)
+                
+                writer.writerow(base_row)
     
     def _generate_summary(self, combination_results: Dict) -> Dict[str, Any]:
         """Genera resumen final del barrido."""
@@ -522,14 +648,26 @@ class SweepRunner:
         if not valid_speeds:
             return {"samples": 0, "error": "No hay datos válidos"}
         
-        return {
-            "samples": len(valid_speeds),
-            "mean": round(statistics.mean(valid_speeds), 2),
-            "median": round(statistics.median(valid_speeds), 2),
-            "min": round(min(valid_speeds), 2),
-            "max": round(max(valid_speeds), 2),
-            "stdev": round(statistics.stdev(valid_speeds), 2) if len(valid_speeds) > 1 else 0
-        }
+        # Función auxiliar para estadísticas seguras
+        def safe_stats_round(value, decimals=2):
+            try:
+                if value is None or not isinstance(value, (int, float)):
+                    return 0.0
+                return round(value, decimals)
+            except (TypeError, ValueError):
+                return 0.0
+        
+        try:
+            return {
+                "samples": len(valid_speeds),
+                "mean": safe_stats_round(statistics.mean(valid_speeds), 2),
+                "median": safe_stats_round(statistics.median(valid_speeds), 2),
+                "min": safe_stats_round(min(valid_speeds), 2),
+                "max": safe_stats_round(max(valid_speeds), 2),
+                "stdev": safe_stats_round(statistics.stdev(valid_speeds), 2) if len(valid_speeds) > 1 else 0
+            }
+        except Exception:
+            return {"samples": 0, "error": "Error calculando estadísticas"}
     
     def _compare_modes(self, text_stats: Dict, vision_stats: Dict) -> Dict[str, Any]:
         """Compara estadísticas entre modos texto y visión."""
@@ -538,9 +676,18 @@ class SweepRunner:
         
         if text_stats["mean"] > 0 and vision_stats["mean"] > 0:
             ratio = text_stats["mean"] / vision_stats["mean"]
+            # Usar la función safe_stats_round definida anteriormente
+            def safe_stats_round_local(value, decimals=2):
+                try:
+                    if value is None or not isinstance(value, (int, float)):
+                        return 0.0
+                    return round(value, decimals)
+                except (TypeError, ValueError):
+                    return 0.0
+                    
             return {
-                "text_vs_vision_ratio": round(ratio, 2),
-                "text_faster_by_percent": round((ratio - 1) * 100, 1),
+                "text_vs_vision_ratio": safe_stats_round_local(ratio, 2),
+                "text_faster_by_percent": safe_stats_round_local((ratio - 1) * 100, 1),
                 "faster_mode": "text" if ratio > 1 else "vision"
             }
         

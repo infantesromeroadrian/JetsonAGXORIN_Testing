@@ -127,6 +127,18 @@ Ejemplos de uso:
         help="Archivo JSONL para guardar métricas"
     )
     
+    # Sistema de monitoreo
+    parser.add_argument(
+        "--no-system-monitor",
+        action="store_true", 
+        help="Desactivar monitoreo de métricas del sistema (CPU, RAM, GPU, temperatura)"
+    )
+    
+    parser.add_argument(
+        "--monitor-file",
+        help="Archivo para guardar métricas detalladas del sistema en formato JSONL"
+    )
+    
     return parser
 
 
@@ -184,7 +196,11 @@ def main():
     
     # Inicializar el runner de tests
     print(f"🚀 Iniciando tests de {args.model}")
-    test_runner = VisionTestRunner(host=args.host)
+    enable_monitoring = not args.no_system_monitor
+    test_runner = VisionTestRunner(
+        host=args.host, 
+        enable_system_monitoring=enable_monitoring
+    )
     
     # Verificar setup
     if not test_runner.verify_setup():
@@ -238,6 +254,14 @@ def main():
         else:
             print(f"⚠️  Warning: No se pudieron guardar las métricas", file=sys.stderr)
     
+    # Guardar métricas detalladas del sistema si se especifica
+    if args.monitor_file and test_runner.system_monitor:
+        try:
+            test_runner.system_monitor.save_metrics_to_file(args.monitor_file)
+            print(f"💾 Métricas del sistema guardadas en: {args.monitor_file}")
+        except Exception as e:
+            print(f"⚠️  Warning: Error guardando métricas del sistema: {e}", file=sys.stderr)
+    
     # Mostrar resumen final
     summary = test_runner.get_summary()
     if summary["overall"].get("total_runs", 0) > 1:
@@ -245,8 +269,19 @@ def main():
         if "decode_tps" in overall_stats:
             print(f"\n🎯 RESUMEN GLOBAL:")
             print(f"   Total de runs: {overall_stats['total_runs']}")
-            print(f"   Velocidad promedio: {overall_stats['decode_tps']['mean']:.1f} t/s")
-            print(f"   Rango: {overall_stats['decode_tps']['min']:.1f} - {overall_stats['decode_tps']['max']:.1f} t/s")
+            
+            # Formateo seguro de estadísticas
+            decode_stats = overall_stats.get('decode_tps', {})
+            mean_tps = decode_stats.get('mean')
+            min_tps = decode_stats.get('min')
+            max_tps = decode_stats.get('max')
+            
+            mean_str = f"{mean_tps:.1f}" if isinstance(mean_tps, (int, float)) else "n/a"
+            min_str = f"{min_tps:.1f}" if isinstance(min_tps, (int, float)) else "n/a"
+            max_str = f"{max_tps:.1f}" if isinstance(max_tps, (int, float)) else "n/a"
+            
+            print(f"   Velocidad promedio: {mean_str} t/s")
+            print(f"   Rango: {min_str} - {max_str} t/s")
     
     print("\n✅ Tests completados")
 

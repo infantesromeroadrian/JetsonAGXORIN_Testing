@@ -60,16 +60,18 @@ class MetricsAnalyzer:
             return None
     
     def process_ollama_stats(self, stats: Dict[str, Any], 
-                           wall_time: float) -> Dict[str, Any]:
+                           wall_time: float,
+                           system_metrics_summary: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Procesa estadísticas crudas de Ollama en métricas estructuradas.
+        Procesa estadísticas crudas de Ollama combinándolas con métricas del sistema.
         
         Args:
             stats: Estadísticas devueltas por Ollama
             wall_time: Tiempo transcurrido en segundos
+            system_metrics_summary: Resumen de métricas del sistema (opcional)
             
         Returns:
-            Dict con métricas procesadas
+            Dict con métricas procesadas combinadas
         """
         # Convertir duraciones de nanosegundos a segundos
         total_duration = self.nanoseconds_to_seconds(stats.get("total_duration"))
@@ -85,12 +87,22 @@ class MetricsAnalyzer:
         prefill_tps = self.safe_division(prompt_eval_count, prompt_eval_duration)
         decode_tps = self.safe_division(eval_count, eval_duration)
         
-        return {
-            "wall_time_s": round(wall_time, 3),
+        # Función auxiliar para redondeo seguro
+        def safe_round(value, decimals=3):
+            if value is None or not isinstance(value, (int, float)):
+                return 0.0
+            try:
+                return round(value, decimals)
+            except (TypeError, ValueError):
+                return 0.0
+
+        # Métricas básicas de Ollama con formateo seguro
+        base_metrics = {
+            "wall_time_s": safe_round(wall_time, 3),
             "total_duration_s": total_duration,
             "load_duration_s": load_duration,
-            "prefill_tokens": prompt_eval_count,
-            "decode_tokens": eval_count,
+            "prefill_tokens": prompt_eval_count or 0,
+            "decode_tokens": eval_count or 0,
             "prefill_duration_s": prompt_eval_duration,
             "decode_duration_s": eval_duration,
             "prefill_tps": prefill_tps,
@@ -98,6 +110,43 @@ class MetricsAnalyzer:
             "total_tokens": (prompt_eval_count or 0) + (eval_count or 0),
             "timestamp": time.time()
         }
+        
+        # Añadir métricas del sistema si están disponibles
+        if system_metrics_summary:
+            system_metrics = {
+                # CPU Metrics
+                "cpu_usage_mean_percent": system_metrics_summary.get('cpu_usage_percent', {}).get('mean'),
+                "cpu_usage_max_percent": system_metrics_summary.get('cpu_usage_percent', {}).get('max'),
+                "cpu_usage_min_percent": system_metrics_summary.get('cpu_usage_percent', {}).get('min'),
+                
+                # RAM Metrics
+                "ram_usage_mean_percent": system_metrics_summary.get('ram_usage_percent', {}).get('mean'),
+                "ram_usage_max_percent": system_metrics_summary.get('ram_usage_percent', {}).get('max'),
+                "ram_used_mean_gb": system_metrics_summary.get('ram_used_gb', {}).get('mean'),
+                "ram_used_max_gb": system_metrics_summary.get('ram_used_gb', {}).get('max'),
+                
+                # GPU Metrics  
+                "gpu_usage_mean_percent": system_metrics_summary.get('gpu_usage_percent', {}).get('mean'),
+                "gpu_usage_max_percent": system_metrics_summary.get('gpu_usage_percent', {}).get('max'),
+                "gpu_usage_min_percent": system_metrics_summary.get('gpu_usage_percent', {}).get('min'),
+                
+                # Temperature Metrics
+                "cpu_temp_mean_c": system_metrics_summary.get('cpu_temperature_c', {}).get('mean'),
+                "cpu_temp_max_c": system_metrics_summary.get('cpu_temperature_c', {}).get('max'),
+                "gpu_temp_mean_c": system_metrics_summary.get('gpu_temperature_c', {}).get('mean'),
+                "gpu_temp_max_c": system_metrics_summary.get('gpu_temperature_c', {}).get('max'),
+                
+                # Power Metrics
+                "power_mean_watts": system_metrics_summary.get('power_consumption_watts', {}).get('mean'),
+                "power_max_watts": system_metrics_summary.get('power_consumption_watts', {}).get('max'),
+                
+                # Monitoring Info
+                "monitoring_duration_s": system_metrics_summary.get('monitoring_duration_s'),
+                "monitoring_samples": system_metrics_summary.get('total_samples')
+            }
+            base_metrics.update(system_metrics)
+        
+        return base_metrics
     
     def add_metrics(self, metrics: Dict[str, Any]) -> None:
         """
@@ -140,37 +189,55 @@ class MetricsAnalyzer:
             "mode": mode_filter or "all"
         }
         
+        # Función auxiliar para redondeo seguro en estadísticas
+        def safe_stats_round(value, decimals=2):
+            try:
+                if value is None or not isinstance(value, (int, float)):
+                    return 0.0
+                return round(value, decimals)
+            except (TypeError, ValueError):
+                return 0.0
+        
         # Estadísticas de decode_tps
         if decode_tps_values:
-            summary["decode_tps"] = {
-                "mean": round(statistics.mean(decode_tps_values), 2),
-                "median": round(statistics.median(decode_tps_values), 2),
-                "min": round(min(decode_tps_values), 2),
-                "max": round(max(decode_tps_values), 2)
-            }
-            
-            if len(decode_tps_values) > 1:
-                summary["decode_tps"]["stdev"] = round(
-                    statistics.stdev(decode_tps_values), 2
-                )
+            try:
+                summary["decode_tps"] = {
+                    "mean": safe_stats_round(statistics.mean(decode_tps_values), 2),
+                    "median": safe_stats_round(statistics.median(decode_tps_values), 2),
+                    "min": safe_stats_round(min(decode_tps_values), 2),
+                    "max": safe_stats_round(max(decode_tps_values), 2)
+                }
+                
+                if len(decode_tps_values) > 1:
+                    summary["decode_tps"]["stdev"] = safe_stats_round(
+                        statistics.stdev(decode_tps_values), 2
+                    )
+            except Exception:
+                summary["decode_tps"] = {"error": "No se pudieron calcular estadísticas"}
         
         # Estadísticas de prefill_tps
         if prefill_tps_values:
-            summary["prefill_tps"] = {
-                "mean": round(statistics.mean(prefill_tps_values), 2),
-                "median": round(statistics.median(prefill_tps_values), 2),
-                "min": round(min(prefill_tps_values), 2),
-                "max": round(max(prefill_tps_values), 2)
-            }
+            try:
+                summary["prefill_tps"] = {
+                    "mean": safe_stats_round(statistics.mean(prefill_tps_values), 2),
+                    "median": safe_stats_round(statistics.median(prefill_tps_values), 2),
+                    "min": safe_stats_round(min(prefill_tps_values), 2),
+                    "max": safe_stats_round(max(prefill_tps_values), 2)
+                }
+            except Exception:
+                summary["prefill_tps"] = {"error": "No se pudieron calcular estadísticas"}
         
         # Estadísticas de tiempo de pared
         if wall_times:
-            summary["wall_time_s"] = {
-                "mean": round(statistics.mean(wall_times), 3),
-                "median": round(statistics.median(wall_times), 3),
-                "min": round(min(wall_times), 3),
-                "max": round(max(wall_times), 3)
-            }
+            try:
+                summary["wall_time_s"] = {
+                    "mean": safe_stats_round(statistics.mean(wall_times), 3),
+                    "median": safe_stats_round(statistics.median(wall_times), 3),
+                    "min": safe_stats_round(min(wall_times), 3),
+                    "max": safe_stats_round(max(wall_times), 3)
+                }
+            except Exception:
+                summary["wall_time_s"] = {"error": "No se pudieron calcular estadísticas"}
         
         return summary
     
@@ -204,9 +271,9 @@ class MetricsAnalyzer:
             
             ratio = stats1["decode_tps"]["mean"] / stats2["decode_tps"]["mean"]
             comparison["decode_tps_ratio"] = {
-                f"{mode1}_vs_{mode2}": round(ratio, 2),
+                f"{mode1}_vs_{mode2}": safe_stats_round(ratio, 2),
                 "faster_mode": mode1 if ratio > 1 else mode2,
-                "speed_difference_percent": round(abs(ratio - 1) * 100, 1)
+                "speed_difference_percent": safe_stats_round(abs(ratio - 1) * 100, 1)
             }
         
         return comparison
@@ -272,16 +339,18 @@ class MetricsAnalyzer:
 
 
 # Funciones de conveniencia para uso directo
-def quick_analyze(stats: Dict[str, Any], wall_time: float) -> Dict[str, Any]:
+def quick_analyze(stats: Dict[str, Any], wall_time: float,
+                 system_metrics_summary: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Análisis rápido de estadísticas de Ollama.
+    Análisis rápido de estadísticas de Ollama con métricas del sistema opcionales.
     
     Args:
         stats: Estadísticas de Ollama
         wall_time: Tiempo transcurrido
+        system_metrics_summary: Resumen de métricas del sistema (opcional)
         
     Returns:
-        Dict con métricas procesadas
+        Dict con métricas procesadas combinadas
     """
     analyzer = MetricsAnalyzer()
-    return analyzer.process_ollama_stats(stats, wall_time)
+    return analyzer.process_ollama_stats(stats, wall_time, system_metrics_summary)

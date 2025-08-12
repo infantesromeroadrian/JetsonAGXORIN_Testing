@@ -1,1 +1,10 @@
+# Core dependencies for Ollama benchmarking
 requests>=2.31
+
+# System monitoring dependencies
+psutil>=5.9.0          # CPU, RAM, temperatura, y otras métricas del sistema
+numpy>=1.21.0          # Operaciones numéricas y estadísticas
+
+# Optional dependencies for advanced monitoring (instalar si están disponibles)
+# GPUtil>=1.4.0        # Monitoreo específico de GPU NVIDIA (alternativo a tegrastats)
+# py-cpuinfo>=9.0.0    # Información detallada del CPU

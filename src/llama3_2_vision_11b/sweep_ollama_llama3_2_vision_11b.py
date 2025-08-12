@@ -144,6 +144,18 @@ Ejemplos de uso:
         help="Archivo CSV para guardar resultados tabulares"
     )
     
+    # Sistema de monitoreo
+    parser.add_argument(
+        "--no-system-monitor",
+        action="store_true",
+        help="Desactivar monitoreo de métricas del sistema (CPU, RAM, GPU, temperatura)"
+    )
+    
+    parser.add_argument(
+        "--monitor-file",
+        help="Archivo para guardar métricas detalladas del sistema en formato JSONL"
+    )
+    
     return parser
 
 
@@ -188,32 +200,57 @@ def print_final_summary(summary: dict) -> None:
     print("📈 RESUMEN FINAL DEL BARRIDO")
     print("="*70)
     
-    print(f"⏱️  Tiempo total: {summary['elapsed_time_minutes']:.1f} minutos")
-    print(f"✅ Jobs completados: {summary['completed_jobs']}/{summary['total_jobs']}")
+    # Función auxiliar para formateo seguro
+    def safe_format(value, decimals=1):
+        if value is None or not isinstance(value, (int, float)):
+            return "n/a"
+        return f"{value:.{decimals}f}"
+    
+    elapsed_time = safe_format(summary.get('elapsed_time_minutes'), 1)
+    completed = summary.get('completed_jobs', 0)
+    total = summary.get('total_jobs', 0)
+    
+    print(f"⏱️  Tiempo total: {elapsed_time} minutos")
+    print(f"✅ Jobs completados: {completed}/{total}")
     
     # Estadísticas por modo
     if "text_mode" in summary and "samples" in summary["text_mode"]:
         text_stats = summary["text_mode"]
-        if text_stats["samples"] > 0:
-            print(f"\n📝 MODO TEXTO ({text_stats['samples']} muestras):")
-            print(f"   Media: {text_stats['mean']:.1f} t/s")
-            print(f"   Mediana: {text_stats['median']:.1f} t/s")
-            print(f"   Rango: {text_stats['min']:.1f} - {text_stats['max']:.1f} t/s")
+        if text_stats.get("samples", 0) > 0:
+            samples = text_stats["samples"]
+            mean = safe_format(text_stats.get('mean'), 1)
+            median = safe_format(text_stats.get('median'), 1)
+            min_val = safe_format(text_stats.get('min'), 1)
+            max_val = safe_format(text_stats.get('max'), 1)
+            
+            print(f"\n📝 MODO TEXTO ({samples} muestras):")
+            print(f"   Media: {mean} t/s")
+            print(f"   Mediana: {median} t/s") 
+            print(f"   Rango: {min_val} - {max_val} t/s")
     
     if "vision_mode" in summary and "samples" in summary["vision_mode"]:
         vision_stats = summary["vision_mode"]
-        if vision_stats["samples"] > 0:
-            print(f"\n🖼️  MODO VISIÓN ({vision_stats['samples']} muestras):")
-            print(f"   Media: {vision_stats['mean']:.1f} t/s")
-            print(f"   Mediana: {vision_stats['median']:.1f} t/s")
-            print(f"   Rango: {vision_stats['min']:.1f} - {vision_stats['max']:.1f} t/s")
+        if vision_stats.get("samples", 0) > 0:
+            samples = vision_stats["samples"]
+            mean = safe_format(vision_stats.get('mean'), 1)
+            median = safe_format(vision_stats.get('median'), 1)
+            min_val = safe_format(vision_stats.get('min'), 1)
+            max_val = safe_format(vision_stats.get('max'), 1)
+            
+            print(f"\n🖼️  MODO VISIÓN ({samples} muestras):")
+            print(f"   Media: {mean} t/s")
+            print(f"   Mediana: {median} t/s")
+            print(f"   Rango: {min_val} - {max_val} t/s")
     
     # Comparación entre modos
     if "speed_comparison" in summary and "error" not in summary["speed_comparison"]:
         comp = summary["speed_comparison"]
+        ratio = safe_format(comp.get('text_vs_vision_ratio'), 2)
+        percent = safe_format(comp.get('text_faster_by_percent'), 1)
+        
         print(f"\n⚡ COMPARACIÓN TEXTO vs VISIÓN:")
-        print(f"   Factor de velocidad: {comp['text_vs_vision_ratio']:.2f}x")
-        print(f"   Texto es {comp['text_faster_by_percent']:.1f}% más rápido")
+        print(f"   Factor de velocidad: {ratio}x")
+        print(f"   Texto es {percent}% más rápido")
     
     # Top combinaciones
     if "combinations" in summary and summary["combinations"]:
@@ -224,7 +261,8 @@ def print_final_summary(summary: dict) -> None:
         for i, combo in enumerate(top_combos, 1):
             ph, img_path, ctx, npred, temp, seed = combo["combination"]
             img_name = img_path.split("/")[-1] if img_path else "texto"
-            print(f"   {i}. {combo['mean_speed']:.1f} t/s - "
+            mean_speed = safe_format(combo.get('mean_speed'), 1)
+            print(f"   {i}. {mean_speed} t/s - "
                   f"ctx={ctx} np={npred} temp={temp} img={img_name}")
 
 
@@ -236,7 +274,11 @@ def main():
     
     # Inicializar el ejecutor de barridos
     print(f"🚀 Iniciando barrido paramétrico de {args.model}")
-    sweep_runner = SweepRunner(host=args.host)
+    enable_monitoring = not args.no_system_monitor
+    sweep_runner = SweepRunner(
+        host=args.host, 
+        enable_system_monitoring=enable_monitoring
+    )
     
     # Verificar configuración
     if not sweep_runner.verify_setup():
@@ -301,6 +343,14 @@ def main():
             print(f"\n💾 Resultados CSV: {args.csv}")
         if args.out:
             print(f"💾 Métricas JSONL: {args.out}")
+        
+        # Guardar métricas detalladas del sistema si se especifica
+        if args.monitor_file and sweep_runner.system_monitor:
+            try:
+                sweep_runner.system_monitor.save_metrics_to_file(args.monitor_file)
+                print(f"💾 Métricas del sistema: {args.monitor_file}")
+            except Exception as e:
+                print(f"⚠️  Warning: Error guardando métricas del sistema: {e}")
         
         print("\n🎉 Barrido completado exitosamente")
         

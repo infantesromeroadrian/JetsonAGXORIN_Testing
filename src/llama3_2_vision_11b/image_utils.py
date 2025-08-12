@@ -134,7 +134,7 @@ class ImageProcessor:
                 "path": str(path.absolute()),
                 "name": path.name,
                 "size_bytes": path.stat().st_size,
-                "size_mb": round(path.stat().st_size / (1024 * 1024), 2),
+                "size_mb": round(path.stat().st_size / (1024 * 1024), 2) if path.stat().st_size else 0.0,
                 "format": path.suffix.lower(),
                 "exists": True,
                 "is_supported": True
