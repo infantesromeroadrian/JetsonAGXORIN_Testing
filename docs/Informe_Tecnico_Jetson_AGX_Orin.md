@@ -298,7 +298,3 @@ python -m src.llama3_2_3b.sweep_ollama_llama3_2_3b \
 Este estudio demuestra que las plataformas edge especializadas como el Jetson AGX Orin pueden **competir e incluso superar** a GPUs dedicadas tradicionales en casos de uso específicos, marcando un punto de inflexión en el desarrollo de IA en el edge.
 
 ---
-
-**Documento generado**: Diciembre 2024  
-**Autor**: Análisis comparativo de benchmarks LLM  
-**Versión**: 2.0 (Consolidada y sin duplicaciones)
